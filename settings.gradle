@@ -1,0 +1,2 @@
+rootProject.name = "Aircraft Location"
+include ':app'

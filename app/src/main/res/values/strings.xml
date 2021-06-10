@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Aircraft Location</string>
+    <string name="mapbox_access_token" translatable="false">pk.eyJ1IjoiYXBpeW9mcmFuayIsImEiOiJja21vZ2l6dWIwcXg1Mm5wZ2Y2d2RyZ3lrIn0.l-pgGYoIMNJJ8QLjS6LOaw</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="product_information">Product Information</string>
+    <string name="connection_loose">Status: No Product Connected</string>
+    <string name="sdk_version">DJI SDK Version: %1$s</string>
+</resources>
