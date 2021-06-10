@@ -1,18 +1,26 @@
 package ai.swiftlabs.aircraftlocation;
 
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.RadioGroup;
+import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
-import com.amap.api.mapcore.util.c;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
@@ -25,8 +33,13 @@ import com.mapbox.mapboxsdk.plugins.annotation.SymbolManager;
 import com.mapbox.mapboxsdk.plugins.annotation.SymbolOptions;
 import com.mapbox.mapboxsdk.style.sources.GeoJsonOptions;
 import com.mapbox.mapboxsdk.utils.BitmapUtils;
+import com.mapbox.mapboxsdk.utils.ColorUtils;
 
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 import dji.common.flightcontroller.FlightControllerState;
 import dji.sdk.base.BaseProduct;
@@ -37,9 +50,10 @@ import timber.log.Timber;
 /**
  * Activity showcasing adding symbols using the annotation plugin
  */
-public class MainActivity extends FragmentActivity implements View.OnClickListener {
+public class MainActivity extends FragmentActivity implements View.OnClickListener, MapboxMap.OnMapClickListener {
     protected static final String TAG = "MainActivity";
     private static final String ID_ICON_AIRPORT = "airport";
+    private static final String MAKI_ICON_MARKER = "castle-15";
 
     private double droneLocationLat = 181, droneLocationLng = 181;
     private FlightController mFlightController;
@@ -49,7 +63,11 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
     private Symbol symbol;
     private MapboxMap mapboxMap;
 
-    private Button locate, add, clear;
+    private boolean isAdd = false;
+
+    private final Map<Integer, Symbol> mSymbols = new ConcurrentHashMap<Integer, Symbol>();
+
+    private Button add, clear;
     private Button config, upload, start, stop;
 
     protected BroadcastReceiver mReceiver = new BroadcastReceiver() {
@@ -59,6 +77,7 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
             onProductConnectionChange();
         }
     };
+    private Symbol mWayPointSymbols;
 
     private void onProductConnectionChange() {
         initFlightController();
@@ -107,7 +126,11 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
 
             mapboxMap.moveCamera(CameraUpdateFactory.zoomTo(10));
 
+            mapboxMap.addOnMapClickListener(MainActivity.this); // add listener for click for map object
+
             addAirplaneImageToStyle(style);
+
+            initFloatingActionButtonClickListeners();
 
             // create symbol manager
             GeoJsonOptions geoJsonOptions = new GeoJsonOptions().withTolerance(0.4f);
@@ -120,7 +143,6 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
     }
 
     private void initUI() {
-        locate = (Button) findViewById(R.id.locate);
         add = (Button) findViewById(R.id.add);
 //        clear = (Button) findViewById(R.id.clear);
         config = (Button) findViewById(R.id.config);
@@ -128,13 +150,24 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
         start = (Button) findViewById(R.id.start);
         stop = (Button) findViewById(R.id.stop);
 
-        locate.setOnClickListener(this);
         add.setOnClickListener(this);
-        clear.setOnClickListener(this);
+//        clear.setOnClickListener(this);
         config.setOnClickListener(this);
         upload.setOnClickListener(this);
         start.setOnClickListener(this);
         stop.setOnClickListener(this);
+    }
+
+    private void initFloatingActionButtonClickListeners() {
+        FloatingActionButton locateAircraftFab = findViewById(R.id.locate);
+        locateAircraftFab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                updateDroneLocation();
+                cameraUpdate(); // Locate the drone's location
+            }
+        });
+
     }
 
     private void addAirplaneImageToStyle(Style style) {
@@ -196,12 +229,80 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
         switch (v.getId()) {
             case R.id.locate:{
                 updateDroneLocation();
-//                cameraUpdate();
+                cameraUpdate();
+                break;
+            }
+            case R.id.config:{
+                showSettingDialog();
+                break;
+            }
+            case R.id.add:{
+                enableDisableAdd();
                 break;
             }
             default:
                 break;
         }
+    }
+
+    private void enableDisableAdd() {
+        if (!isAdd) {
+            isAdd = true;
+            add.setText("Exit");
+        }else{
+            isAdd = false;
+            add.setText("Add");
+        }
+    }
+
+    private void showSettingDialog(){
+        LinearLayout wayPointSettings = (LinearLayout)getLayoutInflater().inflate(R.layout.dialog_waypointsetting, null);
+
+        final TextView wpAltitude_TV = (TextView) wayPointSettings.findViewById(R.id.altitude);
+        RadioGroup speed_RG = (RadioGroup) wayPointSettings.findViewById(R.id.speed);
+        RadioGroup actionAfterFinished_RG = (RadioGroup) wayPointSettings.findViewById(R.id.actionAfterFinished);
+        RadioGroup heading_RG = (RadioGroup) wayPointSettings.findViewById(R.id.heading);
+
+        speed_RG.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener(){
+
+            @Override
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                // TODO Auto-generated method stub
+                Log.d(TAG, "Select Speed finish");
+            }
+        });
+
+        actionAfterFinished_RG.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                // TODO Auto-generated method stub
+                Log.d(TAG, "Select action action");
+            }
+        });
+
+        heading_RG.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+
+            @Override
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                // TODO Auto-generated method stub
+                Log.d(TAG, "Select heading finish");
+            }
+        });
+
+        new AlertDialog.Builder(this)
+                .setTitle("")
+                .setView(wayPointSettings)
+                .setPositiveButton("Finish",new DialogInterface.OnClickListener(){
+                    public void onClick(DialogInterface dialog, int id) {
+                    }
+                })
+                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                })
+                .create()
+                .show();
     }
 
     private void cameraUpdate() {
@@ -222,11 +323,10 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
                     symbolManager.delete(symbol);
                 if (checkGpsCoordinates(droneLocationLat, droneLocationLng)) {
                     SymbolOptions symbolOptions = new SymbolOptions()
-                            .withLatLng(new LatLng(-1.3042537086537584, 36.89093110420671))
+                            .withLatLng(new LatLng(droneLocationLat, droneLocationLng))
                             .withIconImage(ID_ICON_AIRPORT)
                             .withIconSize(1.3f)
-                            .withSymbolSortKey(10.0f)
-                            .withDraggable(true);
+                            .withSymbolSortKey(10.0f);
                     symbol = symbolManager.create(symbolOptions);
                     Timber.e(symbol.toString());
                 }
@@ -243,5 +343,37 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
     public void onReturn(View view){
         Log.d(TAG, "onReturn");
         this.finish();
+    }
+
+    @Override
+    public boolean onMapClick(@NonNull @NotNull LatLng point) {
+        if (isAdd){
+            markWaypoint(point);
+        }else{
+            setResultToToast("Cannot add waypoint");
+        }
+        return false;
+    }
+
+    private void markWaypoint(LatLng point) {
+        // create waypoint symbols
+        SymbolOptions wayPointsOptions = new SymbolOptions()
+                .withLatLng(point)
+                .withIconImage(MAKI_ICON_MARKER)
+                .withIconColor(ColorUtils.colorToRgbaString(Color.BLUE))
+                .withIconSize(1.3f)
+                .withSymbolSortKey(5.0f)
+                .withDraggable(true);
+        mWayPointSymbols = symbolManager.create(wayPointsOptions);
+        mSymbols.put(mSymbols.size(), mWayPointSymbols);
+    }
+
+    private void setResultToToast(final String string){
+        MainActivity.this.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, string, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }
