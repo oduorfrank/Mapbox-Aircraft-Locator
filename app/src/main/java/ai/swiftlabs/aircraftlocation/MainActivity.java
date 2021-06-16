@@ -46,6 +46,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import dji.common.error.DJIError;
 import dji.common.flightcontroller.FlightControllerState;
 import dji.common.mission.waypoint.Waypoint;
+import dji.common.mission.waypoint.WaypointAction;
+import dji.common.mission.waypoint.WaypointActionType;
 import dji.common.mission.waypoint.WaypointMission;
 import dji.common.mission.waypoint.WaypointMissionDownloadEvent;
 import dji.common.mission.waypoint.WaypointMissionExecutionEvent;
@@ -130,6 +132,8 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
             setResultToToast("Execution finished: " + (error == null ? "Success!" : error.getDescription()));
         }
     };
+    private WaypointActionType mAction = WaypointActionType.START_TAKE_PHOTO;
+    private int actionParam = 0;
 
     private void onProductConnectionChange() {
         initFlightController();
@@ -510,7 +514,7 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
     private void cameraUpdate() {
         CameraPosition position = new CameraPosition.Builder()
                 .target(new LatLng(droneLocationLat, droneLocationLng))
-                .zoom(10)
+                .zoom(18)
                 .tilt(20)
                 .build();
 
@@ -552,6 +556,8 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
         if (isAdd){
             markWaypoint(point);
             Waypoint mWaypoint = new Waypoint(point.getLatitude(), point.getLongitude(), altitude);
+            WaypointAction waypointAction = new WaypointAction(mAction, actionParam);
+            mWaypoint.addAction(waypointAction);
             //Add Waypoints to Waypoint arraylist;
             if (waypointMissionBuilder != null) {
                 waypointList.add(mWaypoint);
